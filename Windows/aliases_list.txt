@@ -1,0 +1,11 @@
+gl=git log --stat $*
+glo=git log --oneline $*
+glog=git log --oneline --graph --all $*
+gs=git status $*
+gd=git diff $*
+gds=git diff --staged $*
+gc=git checkout $*
+gbl=git branch --list --all $*
+gp=git pull $*
+
+ls=dir $*

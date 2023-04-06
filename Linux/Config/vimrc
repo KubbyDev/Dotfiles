@@ -1,0 +1,295 @@
+" <F2>: Toggle NerdTree
+" <F3>: Swap between sources and headers for c and c++ files
+" <F4>: Compile
+" <F5>: Run
+" <F6>: Generate header file for c and c++ files
+" <F7>: Toggle Syntastic checks
+" <F8>: Compile and run
+" <F9>: Debug
+
+" ------------------------------------------------------------------------------
+" Compilation and running
+" ------------------------------------------------------------------------------
+
+" F4: Compile or Check depending on the language
+map <F4> <ESC> :w <CR> :call Compile("")
+:function! Compile(...)
+:   let ext = expand('%:e')  " Extension of the current file
+:   let name = expand('%:r') " Name of the current file
+    " Compilation arguments ("" if nothing given)
+:   let arguments = a:0 >= 1 ? a:1 : ""
+    " If compile.sh exists, executes it
+:   if(filereadable("compile.sh"))
+:       execute '!bash compile.sh '.arguments.' && echo "Compilation successfull"'
+    " If a Makefile is found, uses it
+:   elseif(filereadable("Makefile"))
+:       execute '!make '.name.' || make'
+    " else run the standard compilation command
+    " C
+:   elseif(ext == "c" || ext == "h")
+:       execute '!gcc -Wall -Wextra -Werror -std=c99 -O1 -o a.out *.[co] -lm '.arguments.' && echo "Compilation successfull"'
+    " Cpp
+:   elseif(ext == "cpp" || ext == "cc" || ext == "hh")
+:       execute '!g++ -Wall -Wextra -Werror -O1 -o a.out *.(cc|cpp|o) -lm '.arguments.' && echo "Compilation successfull"'
+    " 68k
+:   elseif(ext == "asm")
+:       !/home/kubby/Programs/68000/a68k % -o%:r.hex -s -n -rmal && echo "Compilation successfull"
+    " Rust
+:   elseif(ext == "rs") " Doesn't actually compile but check is faster
+:       !cargo check
+    " Python
+:   elseif(ext == "py")
+:       !python3 -m py_compile *.py
+    " Bison
+:   elseif(ext == "y")
+:       !bison %
+    " Haskell
+:   elseif(ext == "hs")
+:       execute '!ghc -outputdir /tmp '.expand('%:t')
+:   endif
+:endfunction
+
+" F5: Run
+map <F5> <ESC> :w <CR> :call Run("")
+:function! Run(...)
+:   let ext = expand('%:e')  " Extension of the current file
+:   let name = expand('%:r') " Name of the current file
+    " Arguments for the execution ("" if nothing given)
+:   let arguments = a:0 >= 1 ? a:1 : ""
+    " If run.sh exists, executes it
+:   if(filereadable("run.sh"))
+:       execute '!bash run.sh '.arguments
+    " else run the standard run command
+    " C, Cpp, Cuda and Haskell
+:   elseif(ext == "c" || ext == "h" || ext == "cpp" || ext == "cc" || ext == "hh" || ext == "cu" || ext == "hs")
+:       if(filereadable(name)) " Looks for the current file without extension
+:           execute '!./'.name.' '.arguments.' ; rm '.name
+:       elseif(filereadable("a.out")) " Looks for an a.out executable
+:           execute '!./a.out '.arguments.' ; rm a.out'
+:       elseif(filereadable("main")) " Looks for a main executable
+:           execute '!./main '.arguments.' ; rm main'
+:       else
+:           !echo "Compiled file not found"
+:       endif
+    " 68k
+:   elseif(ext == "asm")
+:       if(filereadable(expand("%:r") . ".hex"))
+:           silent !(/home/kubby/Programs/68000/d68k.sh %:r.hex && rm %:r.hex) &
+:       else
+:           !echo "Compiled file not found"
+:       endif
+    " Bash scripts
+:   elseif(ext == "sh")
+:       execute '!bash '.expand('%:t').' '.arguments
+    " Python scripts
+:   elseif(ext == "py")
+:       execute '!python3 '.expand('%:t').' '.arguments
+    " Rust
+:   elseif(ext == "rs")
+:       execute '!cargo run -- '.arguments.' ; cargo clean'
+    " Lisp
+:   elseif(ext == "lsp" || ext == "lisp")
+:       execute '!sbcl --script '.expand('%:t').' '.arguments
+:   endif
+:endfunction
+
+" F8: Compile and Run
+map <F8> <ESC> :w <CR> :call CompileRun() <CR>
+:function! CompileRun()
+:   let ext = expand('%:e')  " Extension of the current file
+:   let name = expand('%:r') " Name of the current file
+:   if(ext == "rs" || ext == "py" || ext == "sh")
+:       call Run()
+:   else
+:       call Compile()
+:       call Run()
+:   endif
+:endfunction
+
+" F9: Debug
+map <F9> <ESC> :w <CR> :call Debug("", "")
+:function! Debug(...)
+    " Extension of the current file
+:   let ext = expand('%:e')
+    " Compilation arguments ("" if nothing given)
+:   let compArgs = a:0 >= 1 ? a:1 : ""
+    " Arguments for the execution ("" if nothing given)
+:   let runArgs = a:0 >= 2 ? a:2 : ""
+    " If a Makefile is found, uses it
+:   if(filereadable("Makefile"))
+:       execute '!(make debug || make) && gdb --args main '.runArgs.' ; make clean'
+:   else
+        " C
+:       if(ext == "c" || ext == "h")
+:           execute '!gcc -Wall -Wextra -std=c99 -O0 -o a.out *.[co] -lm -g '.compArgs.' && gdb --args ./a.out '.runArgs.' ; rm ./a.out'
+        " Cpp
+:       elseif(ext == "cpp" || ext == "cc" || ext == "hh")
+:           execute '!g++ -Wall -Wextra -O0 -o a.out *.(cc|cpp|o) -lm -g '.compArgs.' && gdb --args ./a.out '.runArgs.' ; rm ./a.out'
+        " 68k
+:       elseif(ext == "asm")
+:           call CompileRun()
+        " Bison
+:       elseif(ext == "y")
+:           !bison % -goutputgraph.dot -o /dev/null; dot -Tpng outputgraph.dot | display; rm outputgraph.dot
+        " Lisp
+:       elseif(ext == "lsp" || ext == "lisp")
+:           !sbcl --load %
+        " Haskell
+:       elseif(ext == "hs")
+:           !ghci -outputdir /tmp %
+:       endif
+:   endif
+:endfunction
+
+" ------------------------------------------------------------------------------
+" Plugins
+" ------------------------------------------------------------------------------
+
+set nocompatible
+filetype off
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+
+Plugin 'VundleVim/Vundle.vim'
+" Plugin 'Valloric/YouCompleteMe'
+" Plugin 'joshdick/onedark.vim'
+Plugin 'SirVer/ultisnips'
+Plugin 'honza/vim-snippets'
+Plugin 'justinmk/vim-syntax-extra'
+Plugin 'vim-syntastic/syntastic'
+Plugin 'Raimondi/delimitMate'
+Plugin 'scrooloose/nerdtree'
+Plugin 'Xuyuanp/nerdtree-git-plugin'
+Plugin 'ntpeters/vim-better-whitespace'
+Plugin 'powerline/powerline', {'rtp': 'powerline/bindings/vim'}
+Plugin 'rust-lang/rust.vim'
+Plugin 'shirk/vim-gas'
+
+call vundle#end()
+filetype plugin indent on
+
+" Snippets
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+
+" Syntastic
+set statusline+=%#warningmsg#
+set statusline+=%{SyntasticStatuslineFlag()}
+set statusline+=%*
+let g:syntastic_always_populate_loc_list = 1
+let g:syntastic_auto_loc_list = 1
+let g:syntastic_check_on_open = 0
+let g:syntastic_check_on_wq = 0
+let b:syntastic_c_cflags = '-Wall -Wextra -std=c99 -pedantic -lm -pthread'
+let g:syntastic_python_python_exec = '/usr/bin/python3'
+map <F7> :SyntasticToggleMode<CR>
+
+" NERDtree
+map <F2> :NERDTreeToggle<CR>
+autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
+
+" Powerline
+set laststatus=2
+
+" Better Whitespace
+let g:better_whitespace_enabled=0 " Disables highlighting
+let g:strip_whitespace_on_save=0
+function EnableWSClean()
+    let g:strip_whitespace_on_save=1
+    let g:strip_whitelines_at_eof=1
+    let g:strip_whitespace_confirm=0
+endfunction
+
+" ------------------------------------------------------------------------------
+" File specific things
+" ------------------------------------------------------------------------------
+
+let ext = expand('%:e')
+let filename = expand('%:r')
+
+" Turns Syntastic off for 68k assembly files
+if(ext == "asm")
+    silent autocmd VimEnter * :SyntasticToggleMode
+endif
+
+" Executes the header generation script for c and cpp files when F6 is pressed
+if(ext == "c" || ext == "cpp" || ext == "cc" || ext == "cu")
+    map <F6> <ESC> :w <CR> :silent !python ~/Code/Linux/Scripts/generate_header.py % <CR> <C-l>
+endif
+
+" Enables the White space cleanup when the file is saved
+if(ext == "c" || ext == "cpp" || ext == "cc" || ext == "cu" || ext == "h" || ext == "hh" || ext == "asm" || ext == "py" || ext == "rs" || ext == "sql" || ext == "s" || ext == "S")
+    call EnableWSClean()
+endif
+
+" Swaps between source and header when F3 is pressed for c and cpp files
+function SwapSourceHeader()
+    execute ':w'
+    let f = g:filename
+    if(g:ext == "c")
+        let f .= ".h"
+        let g:ext = "h"
+    elseif(g:ext == "cc" || g:ext == "cpp")
+        let f .= ".hh"
+        let g:ext = "hh"
+    elseif(g:ext == "h")
+        let f .= ".c"
+        let g:ext = "c"
+    elseif(g:ext == "hh")
+        let f .= ".cc"
+        let g:ext = "cc"
+    endif
+    execute ':e ' f
+endfunction
+if(ext == "c" || ext == "cpp" || ext == "cc" || ext == "h" || ext == "hh")
+    map <F3> <ESC> :call SwapSourceHeader() <CR>
+endif
+
+" ------------------------------------------------------------------------------
+" Others
+" ------------------------------------------------------------------------------
+
+" Makes undo persistent (doesn't reset when vim closes)
+set undofile
+set undodir=~/.vim
+
+" Displays line numbers
+set number
+set cursorline
+
+" Forces the tabs to be made of spaces
+set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
+
+" Auto reloads the file if it's modified outside of vim
+set autoread
+
+" Avoids problems with \r
+set fileformat=unix
+
+" Enables mouse
+set mouse=a
+
+" Theme
+" colorscheme onedark
+colorscheme monokai
+
+" Prevents line wrap
+set nowrap
+
+" Set the minimal amount of lines under and above the cursor
+set scrolloff=5
+
+" Syntaxic coloration
+syntax on
+autocmd Filetype asm set syntax=gas
+autocmd Filetype c set syntax=c
+autocmd Filetype h set syntax=c
+
+" Highlights text that goes over 80 charaters in red
+highlight OverLength ctermfg=red guibg=#592929
+match OverLength /\%81v.\+/
+
+" Sets the background transparent
+hi Normal guibg=NONE ctermbg=NONE
+hi NonText guibg=NONE ctermbg=NONE
