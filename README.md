@@ -4,4 +4,7 @@ Install procedure:
 
 TODO:
 - Auto install scripts
-- Cross platform aliases handling
+- Cross-platform aliases handling
+
+Adding a command:
+TODO
